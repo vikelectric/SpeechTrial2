@@ -1,45 +1,37 @@
 import streamlit as st
+from bokeh.models.widgets import Button
+from bokeh.models import CustomJS
+from streamlit_bokeh_events import streamlit_bokeh_events
 
-st.title("Speech to Text Transcription")
+stt_button = Button(label="Speak", width=100)
 
-st.markdown("""
-    <button id="start_button">Speak</button>
-    <input type="text" id="speech_to_text" readonly style="width: 100%; margin-top: 10px;">
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM content loaded');
-        var startButton = document.getElementById('start_button');
-        if (startButton) {
-            console.log('Button found');
-            startButton.addEventListener('click', function() {
-                console.log('Button clicked. Starting recognition...');
-                var recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-                recognition.lang = 'en-US';
-                recognition.interimResults = false;
-                recognition.maxAlternatives = 1;
+stt_button.js_on_event("button_click", CustomJS(code="""
+    var recognition = new webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
 
-                recognition.start();
-                console.log('Recognition started.');
-
-                recognition.onresult = function(event) {
-                    var speechResult = event.results[0][0].transcript;
-                    console.log('Recognition result: ', speechResult);
-                    document.getElementById('speech_to_text').value = speechResult;
-                    recognition.stop();
-                };
-
-                recognition.onerror = function(event) {
-                    console.error('Recognition error: ', event.error);
-                    recognition.stop();
-                };
-
-                recognition.onend = function() {
-                    console.log('Recognition ended.');
-                };
-            });
-        } else {
-            console.error('Button not found.');
+    recognition.onresult = function (e) {
+        var value = "";
+        for (var i = e.resultIndex; i < e.results.length; ++i) {
+            if (e.results[i].isFinal) {
+                value += e.results[i][0].transcript;
+            }
         }
-    });
-    </script>
-""", unsafe_allow_html=True)
+        if ( value != "") {
+            document.dispatchEvent(new CustomEvent("GET_TEXT", {detail: value}));
+        }
+    }
+    recognition.start();
+    """))
+
+result = streamlit_bokeh_events(
+    stt_button,
+    events="GET_TEXT",
+    key="listen",
+    refresh_on_update=False,
+    override_height=75,
+    debounce_time=0)
+
+if result:
+    if "GET_TEXT" in result:
+        st.write(result.get("GET_TEXT"))
